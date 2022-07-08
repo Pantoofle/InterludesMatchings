@@ -22,7 +22,7 @@ class Activity:
         self.players: List[Player] = []
 
     def __repr__(self):
-        return f"{self.id} | {self.name} | Max participants : {self.capacity} | {self.start} - {self.end}"
+        return f"{self.id} | {self.name} | {len(self.players)} / {self.capacity} players | {self.start} - {self.end}"
 
     def conflicts_with(self, other: Activity) -> bool:
         if (self.start <= other.start) and (other.start < self.end):
@@ -175,7 +175,8 @@ class Matching:
         interested_players.sort(key=lambda p: p.activity_rank(activity))
         return interested_players
 
-    def cast_with_hospital_residents(self) -> None:
+    def cast_with_hospital_residents(self) -> bool:
+        """Returns True if the function did cast som players. False if nothing was done"""
         player_wishes: Dict[Player, List[Activity]] = {p: p.wishes for p in self.active_players}
         activities_waiting_list: Dict[Activity, List[Player]] = {a: self.generate_activity_waiting_list(a)
                                                                  for a in self.active_activities}
@@ -191,23 +192,26 @@ class Matching:
 
         # Match returns a Dict[Hospital, List[Resident]]
         # So to access the Activity and Player underneath, we must use the .name method
+        did_something = False
         for (a, cast) in match.items():
             for p in cast:
                 activity = self.find_activity(a.name.id)
                 player = self.find_player(p.name.id)
                 self.assign_activity(player, activity)
+                did_something = True
+        return did_something
 
     def print_activities_status(self) -> None:
         print("Activities with a full cast:")
         for a in self.done_activities:
-            print(f"* {a.name} | Start : {a.start}")
+            print(f"* {a}")
             for p in a.players:
                 print(f"  - {p.name}")
             print("")
 
         print("Activities WITHOUT a full cast:")
         for a in self.active_activities:
-            print(f"* {a.name} | Start: {a.start} | Players given: {len(a.players)} / {a.capacity} players")
+            print(f"* {a}")
             for p in a.players:
                 print(f"  - {p.name}")
             for _ in range(len(a.players), a.capacity):
@@ -220,3 +224,15 @@ class Matching:
             print(f"* {p.name} | Got {len(p.activities)} activities")
             for a in p.activities:
                 print(f"  - {a.name} | Start: {a.start}")
+
+    def solve(self) -> None:
+        while True:
+            print("Casting in priority the players with only one wish and no casts yet")
+            while self.cast_if_one_wish():
+                pass
+
+            print("No more priority players. Now casting like usual")
+            if not self.cast_with_hospital_residents():
+                break
+        print("Done")
+

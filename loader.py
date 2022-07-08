@@ -26,6 +26,8 @@ def load_players(path: Path, activities: List[Activity]) -> List[Player]:
     # wish <n> : Activity in rank <n> in their wishlist. These columns MUST be in the right order
     # max_games : max number of activities to participate
 
+    # TODO: Manage players disponibility during the week to remove wishes for activities when the player is not there
+
     def find_activity(name: str) -> Optional[Activity]:
         a = [act for act in activities if act.name == name]
         try:
@@ -41,6 +43,7 @@ def load_players(path: Path, activities: List[Activity]) -> List[Player]:
     for (_, p) in players_df.iterrows():
         # Convert the ranked names into a sorted list of Activities
         wishes = [find_activity(act) for act in p[wishes_columns] if not pandas.isna(act)]
-        players.append(Player(p['name'], wishes))
+        max_games = p['max_games'] if not pandas.isna(p['max_games']) else None
+        players.append(Player(p['name'], wishes, max_activities=max_games))
 
     return players
