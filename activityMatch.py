@@ -103,6 +103,15 @@ class Player:
     def activity_rank(self, activity: Activity) -> int:
         return self.wishes.index(activity)
 
+    def possible_wishes(self) -> List[Activity]:
+        # Remove activities that are full
+        w = [a for a in self.wishes if not a.is_full()]
+        # remove activities with bl conflict
+        for player_bl in self.blacklist:
+            w = [a for a in w if player_bl not in a.players]
+
+        return w
+
 
 class Matching:
     def __init__(self, players: List[Player], activities: List[Activity]):
@@ -150,7 +159,7 @@ class Matching:
             print(f"Tried to give [{activity.name}] to {player.name} but it is full.")
             return
 
-        # Check potential blacklist conflicts from the same wave
+        # Check potential blacklist conflicts with other players
         for p in player.blacklist:
             if p in activity.players:
                 print(f"Could not give {activity.name} to {player.name} because of some blacklist conflict")
@@ -160,13 +169,6 @@ class Matching:
         print(f"Giving [{activity.name}] to {player.name}")
         player.add_activity(activity)
         activity.add_player(player)
-        # Checking the player's blacklist and remove all players from being cast to this activity
-        for p in player.blacklist:
-            p.remove_wish(activity)
-        # Check the other players blacklists
-        for p in self.active_players:
-            if player in p.blacklist:
-                p.remove_wish(activity)
 
         # Then, cleanup full activities or players with no more wishes
         self.cleanup()
@@ -219,12 +221,9 @@ class Matching:
         interested_players.sort(key=lambda p: p.activity_rank(activity))
         return interested_players
 
-    def remove_impossible_wishes(self, wishes: List[Activity]) -> List[Activity]:
-        return [a for a in wishes if not a.is_full()]
-
     def cast_with_hospital_residents(self) -> bool:
         """Returns True if the function did cast som players. False if nothing was done"""
-        player_wishes: Dict[Player, List[Activity]] = {p: self.remove_impossible_wishes(p.wishes)
+        player_wishes: Dict[Player, List[Activity]] = {p: p.possible_wishes()
                                                        for p in self.active_players}
         activities_waiting_list: Dict[Activity, List[Player]] = {a: self.generate_activity_waiting_list(a)
                                                                  for a in self.active_activities}
@@ -241,6 +240,10 @@ class Matching:
         finished = [p for (p, w) in player_wishes.items() if w == []]
         for p in finished:
             player_wishes.pop(p)
+            for (a, wl) in activities_waiting_list.items():
+                if p in wl:
+                    wl.remove(p)
+
 
         game = HospitalResident.create_from_dictionaries(player_wishes, activities_waiting_list, capacities)
         match = game.solve(optimal="resident")

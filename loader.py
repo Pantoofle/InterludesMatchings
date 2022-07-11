@@ -1,6 +1,6 @@
 from pathlib import Path
 import pandas
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 from activityMatch import Activity, Player
 
@@ -40,10 +40,32 @@ def load_players(path: Path, activities: List[Activity]) -> List[Player]:
     wishes_columns: List[str] = [c for c in players_df.columns if c.startswith("wish")]
     print(f"Detected {len(wishes_columns)} columns containing wishes")
 
+    blacklist: Dict[str, List[str]] = {}
     for (_, p) in players_df.iterrows():
         # Convert the ranked names into a sorted list of Activities
         wishes = [find_activity(act) for act in p[wishes_columns] if not pandas.isna(act)]
         max_games = p['max_games'] if not pandas.isna(p['max_games']) else None
+        blacklist[p['name']] = str(p['blacklist']).strip().split(';')
+
         players.append(Player(p['name'], wishes, max_activities=max_games))
 
+    # Now that the players are created, populate the blacklists
+    for (name, bl_names) in blacklist.items():
+        player = [pl for pl in players if pl.name == name][0]
+        bl = [find_player_by_name(b, players) for b in bl_names if b != '' and b != 'nan']
+
+        for pl in bl:
+            if pl is not None:
+                player.add_blacklist_player(pl)
+
     return players
+
+
+def find_player_by_name(name:str, players: List[Player]) -> Optional[Player]:
+    p = [pl for pl in players if pl.name == name]
+    if not p:
+        print(f"Could not find player {name}")
+        return None
+    else:
+        return p[0]
+
