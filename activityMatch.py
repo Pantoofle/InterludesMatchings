@@ -24,13 +24,16 @@ class Activity:
     def __repr__(self):
         return f"{self.id} | {self.name} | {len(self.players)} / {self.capacity} players | {self.start} - {self.end}"
 
-    def conflicts_with(self, other: Activity) -> bool:
-        if (self.start <= other.start) and (other.start < self.end):
+    def overlaps(self, start: datetime.datetime, end: datetime.datetime) -> bool:
+        if (self.start <= start) and (start < self.end):
             return True
-        elif (other.start <= self.start) and (self.start < other.end):
+        elif (start <= self.start) and (self.start < end):
             return True
         else:
             return False
+
+    def conflicts_with(self, other: Activity) -> bool:
+        return self.overlaps(other.start, other.end)
 
     def find_conflicting_activities(self, activities: List[Activity]) -> List[Activity]:
         return [a for a in activities if self.conflicts_with(a)]
@@ -49,6 +52,7 @@ class Activity:
 
     def remaining_slots(self) -> int:
         return self.capacity - len(self.players)
+
 
 
 class Player:
