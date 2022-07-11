@@ -64,7 +64,8 @@ def load_players(path: Path, activities: List[Activity]) -> List[Player]:
         if pandas.isna(p['name']):
             continue
 
-        print(f"Processing player {p['name']}")
+        name = p['name'].strip()
+        print(f"Processing player {name}")
         # Convert the ranked names into a sorted list of Activities
         # Be careful, players rank a given activity but one activity may have multiple sessions. So we get all the
         # activities with this name and add them in order to the wishlist
@@ -75,7 +76,7 @@ def load_players(path: Path, activities: List[Activity]) -> List[Player]:
             wishes.extend(find_activities(act_name.strip()))
 
         max_games = p['max_games'] if not pandas.isna(p['max_games']) else None
-        blacklist[p['name']] = str(p['blacklist']).strip().split(';')
+        blacklist[name] = str(p['blacklist']).strip().split(';')
 
         # Load time availability and remove wishes when the player is not available
         for (col, (start, end)) in time_slots.items():
@@ -83,13 +84,13 @@ def load_players(path: Path, activities: List[Activity]) -> List[Player]:
             if pandas.isna(p[col]):
                 removes = [w.name for w in wishes if w.overlaps(start, end)]
                 if removes:
-                    print(f"{p['name']} is not available {col}. Removing impossible wishes")
+                    print(f"{name} is not available {col}. Removing impossible wishes")
                     print(f"Removed : ")
                     for a in removes:
                         print(f'- {a}')
                 wishes = [w for w in wishes if not w.overlaps(start, end)]
 
-        players.append(Player(p['name'], wishes, max_activities=max_games))
+        players.append(Player(name, wishes, max_activities=max_games))
 
     # Now that the players are created, populate the blacklists
     for (name, bl_names) in blacklist.items():
