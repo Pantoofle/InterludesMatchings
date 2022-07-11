@@ -115,8 +115,12 @@ class Player:
         # Remove activities that are full
         w = [a for a in self.wishes if not a.is_full()]
         # remove activities with bl conflict
+        # Remove activities where there is a target already casted
         for player_bl in self.blacklist:
             w = [a for a in w if player_bl not in a.players]
+
+        # Remove activities where someone in the cast blacklisted us
+        w = [a for a in w if not any([self in p.blacklist for p in a.players])]
 
         return w
 
@@ -174,10 +178,18 @@ class Matching:
             return
 
         # Check potential blacklist conflicts with other players
+        # Check if someone in player's blacklist is already in the cast
         for p in player.blacklist:
             if p in activity.players:
                 print(f"Could not give {activity.name} to {player.name} because of some blacklist conflict")
                 return
+
+        # Check if someone in the cast blacklisted player
+        for p in activity.players:
+            if player in p.blacklist:
+                print(f"Could not give {activity.name} to {player.name} because of some blacklist conflict")
+                return
+
 
         # Add the activity to the player cast list, and the player to the activity cast list
         print(f"Giving [{activity.name}] to {player.name}")
