@@ -14,7 +14,7 @@ def load_activities(path: Path) -> List[Activity]:
 
     activities_df = pandas.read_csv(path, delimiter=',', quotechar='"', parse_dates=['start', 'end'])
     return [
-        Activity(act['name'], act['capacity'], act['start'], act['end'])
+        Activity(act['name'].strip(), act['capacity'], act['start'], act['end'])
         for (_, act) in activities_df.iterrows() if not pandas.isna(act['name'])
     ]
 
@@ -33,7 +33,8 @@ def load_players(path: Path, activities: List[Activity]) -> List[Player]:
         try:
             return a[0]
         except IndexError:
-            raise ValueError(f"Could not find activity {name} in the activity list. Check your activity file.")
+            print(f"WARNING. Could not find activity {name} in the activity list. Check your activity file.")
+            return None
 
     players_df = pandas.read_csv(path, delimiter=',', quotechar='"')
     players: List[Player] = []
@@ -47,7 +48,8 @@ def load_players(path: Path, activities: List[Activity]) -> List[Player]:
 
         print(f"Processing player {p['name']}")
         # Convert the ranked names into a sorted list of Activities
-        wishes = [find_activity(act) for act in p[wishes_columns] if not pandas.isna(act)]
+        wishes = [find_activity(act.strip()) for act in p[wishes_columns] if not pandas.isna(act)]
+        wishes = [w for w in wishes if w is not None]
         max_games = p['max_games'] if not pandas.isna(p['max_games']) else None
         blacklist[p['name']] = str(p['blacklist']).strip().split(';')
 
