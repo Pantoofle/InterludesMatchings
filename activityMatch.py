@@ -276,9 +276,11 @@ class Matching:
         interested_players: List[Player] = [p for (p, wishes) in player_wishes.items() if activity in wishes]
         # Shuffle them
         random.shuffle(interested_players)
-        # Then, sort by the rank of the activity on the wishlist of each player, so that a wish
-        # in first position is stronger than a wish in 10th position
-        interested_players.sort(key=lambda p: p.activity_rank(activity))
+        # Then, sort by the number of activities that a given player already has and then
+        # the rank of the activity on the wishlist of each player, so that a wish
+        # in first position is stronger than a wish in 10th position, but a player with 2 activities has priority over
+        # someone with 5
+        interested_players.sort(key=lambda p: (len(p.activities), p.activity_rank(activity)))
         return interested_players
 
     def cast_with_hospital_residents(self) -> bool:
