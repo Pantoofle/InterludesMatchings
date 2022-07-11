@@ -15,7 +15,7 @@ def load_activities(path: Path) -> List[Activity]:
     activities_df = pandas.read_csv(path, delimiter=',', quotechar='"', parse_dates=['start', 'end'])
     return [
         Activity(act['name'], act['capacity'], act['start'], act['end'])
-        for (_, act) in activities_df.iterrows()
+        for (_, act) in activities_df.iterrows() if not pandas.isna(act['name'])
     ]
 
 
@@ -42,6 +42,10 @@ def load_players(path: Path, activities: List[Activity]) -> List[Player]:
 
     blacklist: Dict[str, List[str]] = {}
     for (_, p) in players_df.iterrows():
+        if pandas.isna(p['name']):
+            continue
+
+        print(f"Processing player {p['name']}")
         # Convert the ranked names into a sorted list of Activities
         wishes = [find_activity(act) for act in p[wishes_columns] if not pandas.isna(act)]
         max_games = p['max_games'] if not pandas.isna(p['max_games']) else None
