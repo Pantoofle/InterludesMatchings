@@ -28,13 +28,13 @@ def load_players(path: Path, activities: List[Activity]) -> List[Player]:
 
     # TODO: Manage players disponibility during the week to remove wishes for activities when the player is not there
 
-    def find_activity(name: str) -> Optional[Activity]:
+    def find_activities(name: str) -> List[Activity]:
         a = [act for act in activities if act.name == name]
         try:
-            return a[0]
+            return a
         except IndexError:
             print(f"WARNING. Could not find activity {name} in the activity list. Check your activity file.")
-            return None
+            return []
 
     players_df = pandas.read_csv(path, delimiter=',', quotechar='"')
     players: List[Player] = []
@@ -48,8 +48,14 @@ def load_players(path: Path, activities: List[Activity]) -> List[Player]:
 
         print(f"Processing player {p['name']}")
         # Convert the ranked names into a sorted list of Activities
-        wishes = [find_activity(act.strip()) for act in p[wishes_columns] if not pandas.isna(act)]
-        wishes = [w for w in wishes if w is not None]
+        # Be careful, players rank a given activity but one activity may have multiple sessions. So we get all the
+        # activities with this name and add them in order to the wishlist
+        wishes = []
+        for act_name in p[wishes_columns]:
+            if pandas.isna(act_name):
+                continue
+            wishes.extend(find_activities(act_name.strip()))
+
         max_games = p['max_games'] if not pandas.isna(p['max_games']) else None
         blacklist[p['name']] = str(p['blacklist']).strip().split(';')
 

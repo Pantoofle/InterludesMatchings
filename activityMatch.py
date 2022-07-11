@@ -81,8 +81,12 @@ class Player:
     def add_activity(self, activity: Activity) -> None:
         self.activities.append(activity)
         self.remove_wish(activity)
+
         # remove conflicting wishes
         self.wishes = [a for a in self.wishes if not activity.conflicts_with(a)]
+        # Remove activities with the same name
+        self.wishes = [a for a in self.wishes if a.name != activity.name]
+
         # If we reached the max number of activities, empty the wishlist
         if self.max_activities is not None and len(self.activities) >= self.max_activities:
             self.wishes = []
@@ -124,14 +128,20 @@ class Matching:
     def find_activity(self, id: int) -> Activity:
         return [a for a in self.active_activities + self.done_activities if a.id == id][0]
 
-    def find_activity_by_name(self, name: str) -> Activity:
-        return [a for a in self.active_activities + self.done_activities if a.name == name][0]
+    def find_activity_by_name(self, name: str) -> List[Activity]:
+        act = [a for a in self.active_activities + self.done_activities if a.name == name]
+        if not act:
+            raise ValueError(f"ERROR. Found no activity with name {name}")
+        return act
 
     def find_player(self, id: int) -> Player:
         return [p for p in self.active_players + self.done_players if p.id == id][0]
 
     def find_player_by_name(self, name: str) -> Player:
-        return [p for p in self.active_players + self.done_players if p.name == name][0]
+        pl = [p for p in self.active_players + self.done_players if p.name == name]
+        if not pl:
+            raise ValueError(f"ERROR. Found no players with name {name}")
+        return pl[0]
 
     def cleanup(self) -> None:
         while True:
@@ -183,10 +193,33 @@ class Matching:
             self.active_activities.append(activity)
 
     def remove_from_activity(self, player_name: str, activity_name: str) -> None:
-        self._remove_from_activity(self.find_player_by_name(player_name), self.find_activity_by_name(activity_name))
+        act = self.find_activity_by_name(activity_name)
+        if len(act) != 1:
+            print(f"Multiple activities have the name {activity_name}. Could not make the difference.")
+            print("Instead, use `remove_from_activity_by_id(player, id)` with the unique activity ID")
+            print(f"Activities that matched : ")
+            for a in act:
+                print(a)
+            return
+        self._remove_from_activity(self.find_player_by_name(player_name), act[0])
 
-    def force_assign_activity(self, player_name: str, activity_name:str) -> None:
-        self.assign_activity(self.find_player_by_name(player_name), self.find_activity_by_name(activity_name))
+    def remove_from_activity_by_id(self, player_name: str, activity_id: int) -> None:
+        self._remove_from_activity(self.find_player_by_name(player_name), self.find_activity(activity_id))
+
+    def force_assign_activity(self, player_name: str, activity_name: str) -> None:
+        act = self.find_activity_by_name(activity_name)
+        if len(act) != 1:
+            print(f"Multiple activities have the name {activity_name}. Could not make the difference.")
+            print("Instead, use `force_assign_activity_by_id(player, id)` with the unique activity ID")
+            print(f"Activities that matched : ")
+            for a in act:
+                print(a)
+            return
+
+        self.assign_activity(self.find_player_by_name(player_name), act[0])
+
+    def force_assign_activity_by_id(self, player_name: str, activity_id: int) -> None:
+        self.assign_activity(self.find_player_by_name(player_name), self.find_activity(activity_id))
 
     def add_to_blacklist(self, playerA_name: str, playerB_name: str) -> None:
         pA = self.find_player_by_name(playerA_name)
@@ -217,10 +250,9 @@ class Matching:
 
         capacities = {a: a.remaining_slots() for a in self.active_activities}
 
-
-        activities_waiting_list: Dict[Activity, List[Player]] = {a: self.generate_activity_waiting_list(player_wishes, a)
-                                                                 for a in self.active_activities}
-
+        activities_waiting_list: Dict[Activity, List[Player]] = {
+            a: self.generate_activity_waiting_list(player_wishes, a)
+            for a in self.active_activities}
 
         # removing activities that no one wished
         unwanted = [a for (a, w) in activities_waiting_list.items() if len(w) == 0]
@@ -237,7 +269,6 @@ class Matching:
                     wl.remove(p)
 
         return player_wishes, activities_waiting_list, capacities
-
 
     def generate_activity_waiting_list(self, player_wishes: Dict[Player, List[Activity]],
                                        activity: Activity) -> List[Player]:
@@ -259,6 +290,7 @@ class Matching:
 
         # Match returns a Dict[Hospital, List[Resident]]
         # So to access the Activity and Player underneath, we must use the .name method
+        # The objects are cloned, so we have to find the activity back with its ID
         did_something = False
         for (a, cast) in match.items():
             for p in cast:
