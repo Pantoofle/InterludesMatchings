@@ -41,6 +41,12 @@ class Activity:
     def add_player(self, player: Player) -> None:
         self.players.append(player)
 
+    def remove_player(self, player: Player) -> None:
+        if player not in self.players:
+            print(f"Can't remove player {player.name} from {self.name}. They were not selected to be part of it")
+            return
+        self.players.remove(player)
+
     def remaining_slots(self) -> int:
         return self.capacity - len(self.players)
 
@@ -81,6 +87,15 @@ class Player:
         if self.max_activities is not None and len(self.activities) >= self.max_activities:
             self.wishes = []
 
+    def remove_activity(self, activity: Activity) -> None:
+        if activity not in self.activities:
+            print(f"Can't remove activity {activity.name} from {self.name}. They were not selected to be part of it")
+            return
+        self.activities.remove(activity)
+
+    def add_blacklist_player(self, player: Player) -> None:
+        self.blacklist.append(player)
+
     def is_last_chance(self):
         """If the player has not been cast yet and only one wish remains"""
         return (len(self.activities) == 0) and (len(self.wishes) == 1)
@@ -97,11 +112,17 @@ class Matching:
         self.done_players: List[Player] = []
         self.done_activities: List[Activity] = []
 
-    def find_activity(self, id:int) -> Activity:
+    def find_activity(self, id: int) -> Activity:
         return [a for a in self.active_activities + self.done_activities if a.id == id][0]
 
-    def find_player(self, id:int) -> Player:
+    def find_activity_by_name(self, name: str) -> Activity:
+        return [a for a in self.active_activities + self.done_activities if a.name == name][0]
+
+    def find_player(self, id: int) -> Player:
         return [p for p in self.active_players + self.done_players if p.id == id][0]
+
+    def find_player_by_name(self, name: str) -> Player:
+        return [p for p in self.active_players + self.done_players if p.name == name][0]
 
     def cleanup(self) -> None:
         while True:
@@ -111,10 +132,6 @@ class Matching:
             for a in full_activities:
                 self.active_activities.remove(a)
                 self.done_activities.append(a)
-
-                # Remove it from wishlists
-                for p in self.active_players:
-                    p.remove_wish(a)
 
             # If a player has no more possible wishes, remove it
             new_inactive_players = [p for p in self.active_players if not p.has_wishes()]
@@ -133,6 +150,12 @@ class Matching:
             print(f"Tried to give [{activity.name}] to {player.name} but it is full.")
             return
 
+        # Check potential blacklist conflicts from the same wave
+        for p in player.blacklist:
+            if p in activity.players:
+                print(f"Could not give {activity.name} to {player.name} because of some blacklist conflict")
+                return
+
         # Add the activity to the player cast list, and the player to the activity cast list
         print(f"Giving [{activity.name}] to {player.name}")
         player.add_activity(activity)
@@ -147,6 +170,27 @@ class Matching:
 
         # Then, cleanup full activities or players with no more wishes
         self.cleanup()
+
+    def _remove_from_activity(self, player: Player, activity: Activity) -> None:
+        print(f"Removing {player.name} from the activity {activity.name}")
+        player.remove_activity(activity)
+        activity.remove_player(player)
+        # The activity may now have available slots. So update it !
+        if activity not in self.active_activities:
+            self.done_activities.remove(activity)
+            self.active_activities.append(activity)
+
+    def remove_from_activity(self, player_name: str, activity_name: str) -> None:
+        self._remove_from_activity(self.find_player_by_name(player_name), self.find_activity_by_name(activity_name))
+
+    def force_assign_activity(self, player_name: str, activity_name:str) -> None:
+        self.assign_activity(self.find_player_by_name(player_name), self.find_activity_by_name(activity_name))
+
+    def add_to_blacklist(self, playerA_name: str, playerB_name: str) -> None:
+        pA = self.find_player_by_name(playerA_name)
+        pB = self.find_player_by_name(playerB_name)
+        pA.add_blacklist_player(pB)
+        pB.add_blacklist_player(pA)
 
     def cast_if_one_wish(self) -> bool:
         """For each player that has no activity yet and only one possible remaining wish, try to give it to them.
@@ -175,17 +219,28 @@ class Matching:
         interested_players.sort(key=lambda p: p.activity_rank(activity))
         return interested_players
 
+    def remove_impossible_wishes(self, wishes: List[Activity]) -> List[Activity]:
+        return [a for a in wishes if not a.is_full()]
+
     def cast_with_hospital_residents(self) -> bool:
         """Returns True if the function did cast som players. False if nothing was done"""
-        player_wishes: Dict[Player, List[Activity]] = {p: p.wishes for p in self.active_players}
+        player_wishes: Dict[Player, List[Activity]] = {p: self.remove_impossible_wishes(p.wishes)
+                                                       for p in self.active_players}
         activities_waiting_list: Dict[Activity, List[Player]] = {a: self.generate_activity_waiting_list(a)
                                                                  for a in self.active_activities}
         capacities = {a: a.remaining_slots() for a in self.active_activities}
+
+
         # removing activities that no one wished
         unwanted = [a for (a, w) in activities_waiting_list.items() if len(w) == 0]
         for a in unwanted:
             activities_waiting_list.pop(a)
             capacities.pop(a)
+
+        # removing players with no wishes
+        finished = [p for (p, w) in player_wishes.items() if w == []]
+        for p in finished:
+            player_wishes.pop(p)
 
         game = HospitalResident.create_from_dictionaries(player_wishes, activities_waiting_list, capacities)
         match = game.solve(optimal="resident")
@@ -229,10 +284,10 @@ class Matching:
         while True:
             print("Casting in priority the players with only one wish and no casts yet")
             while self.cast_if_one_wish():
-                pass
+                self.cleanup()
 
             print("No more priority players. Now casting like usual")
             if not self.cast_with_hospital_residents():
                 break
+            self.cleanup()
         print("Done")
-
