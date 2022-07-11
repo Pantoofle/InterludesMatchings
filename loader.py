@@ -43,11 +43,13 @@ def load_players(path: Path, activities: List[Activity]) -> List[Player]:
     print(f"Detected {len(wishes_columns)} columns containing wishes")
 
     slot_names = {
-        'matin' : ('08:00', '13:00'),
-        'après-midi' : ('13:00', '18:00'),
-        'soir' : ('18:00', '23:59')
+        'matin': ('08:00', '13:00'),
+        'après-midi': ('13:00', '18:00'),
+        'soir': ('18:00', '23:59')
     }
-    day_columns: list[str] = [c for c in players_df.columns if c.split(' ')[0] in ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'] ]
+    day_columns: list[str] = [c for c in players_df.columns if
+                              c.split(' ')[0] in ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi',
+                                                  'Dimanche']]
     time_slots = dict()
 
     for slot in day_columns:
@@ -81,7 +83,7 @@ def load_players(path: Path, activities: List[Activity]) -> List[Player]:
             if pandas.isna(p[col]):
                 removes = [w.name for w in wishes if w.overlaps(start, end)]
                 if removes:
-                    print(f"{p['name']} is not available between {start} and {end}. Removing impossible wishes")
+                    print(f"{p['name']} is not available {col}. Removing impossible wishes")
                     print(f"Removed : ")
                     for a in removes:
                         print(f'- {a}')
@@ -101,11 +103,10 @@ def load_players(path: Path, activities: List[Activity]) -> List[Player]:
     return players
 
 
-def find_player_by_name(name:str, players: List[Player]) -> Optional[Player]:
+def find_player_by_name(name: str, players: List[Player]) -> Optional[Player]:
     p = [pl for pl in players if pl.name == name]
     if not p:
         print(f"Could not find player {name}")
         return None
     else:
         return p[0]
-
