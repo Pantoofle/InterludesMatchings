@@ -129,7 +129,7 @@ class Matching:
         return [a for a in self.active_activities + self.done_activities if a.id == id][0]
 
     def find_activity_by_name(self, name: str) -> List[Activity]:
-        act = [a for a in self.active_activities + self.done_activities if a.name == name]
+        act = [a for a in self.active_activities + self.done_activities if a.name.lower() == name.lower()]
         if not act:
             raise ValueError(f"ERROR. Found no activity with name {name}")
         return act
@@ -138,7 +138,7 @@ class Matching:
         return [p for p in self.active_players + self.done_players if p.id == id][0]
 
     def find_player_by_name(self, name: str) -> Player:
-        pl = [p for p in self.active_players + self.done_players if p.name == name]
+        pl = [p for p in self.active_players + self.done_players if p.name.lower() == name.lower()]
         if not pl:
             raise ValueError(f"ERROR. Found no players with name {name}")
         return pl[0]
