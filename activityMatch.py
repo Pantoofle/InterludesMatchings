@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Iterator, Set
 from matching.games import HospitalResident
 import random
 import datetime
@@ -14,10 +14,10 @@ class Activity:
         self.id = Activity.ACTIVE_ACTIVITIES
         Activity.ACTIVE_ACTIVITIES += 1
 
-        self.name = name
-        self.capacity = capacity
-        self.start = start
-        self.end = end
+        self.name: str = name
+        self.capacity: int = capacity
+        self.start: datetime.datetime = start
+        self.end: datetime.datetime = end
 
         self.players: List[Player] = []
 
@@ -32,11 +32,42 @@ class Activity:
         else:
             return False
 
-    def conflicts_with(self, other: Activity) -> bool:
-        return self.overlaps(other.start, other.end)
+    def breaks_constraint(self, cast: List[Activity], constraint: Constraint) -> bool:
+        if constraint == Constraint.TWO_SAME_DAY:
+            return self.start.date() in [a.start.date() for a in cast]
+        elif constraint == Constraint.NIGHT_THEN_MORNING:
+            # Check if there is only a few hours between the murders but on different days
+            pairs = [(self.end, a.start) for a in cast] + \
+                    [(a.end, self.start) for a in cast]
+            return any([(a - b <= datetime.timedelta(hours=17))
+                        and (a.date() != b.date()) for (a, b) in pairs])
+        elif constraint == Constraint.TWO_CONSECUTIVE_DAYS:
+            return any([abs((a.start.date() - self.start.date()).days) == 1 for a in cast])
+        elif constraint == Constraint.THREE_CONSECUTIVE_DAYS:
+            days_played = set([a.start.date() for a in cast] + [self.start.date()])
+            days_played = sorted(list(days_played))
+            return any(((b - a).days == 1) and
+                       ((c-b).days == 1) for (a, b, c) in window(days_played, 3))
+        elif constraint == Constraint.MORE_CONSECUTIVE_DAYS:
+            days_played = set([a.start.date() for a in cast] + [self.start.date()])
+            days_played = sorted(list(days_played))
+            return any(((b - a).days == 1) and
+                       ((c - b).days == 1) and
+                       ((d - c).days == 1) for (a, b, c, d) in window(days_played, 4))
+        else:
+            raise ValueError("Unknown Constraint")
 
-    def find_conflicting_activities(self, activities: List[Activity]) -> List[Activity]:
-        return [a for a in activities if self.conflicts_with(a)]
+    def conflicts_with(self, other: Activity, player: Optional[Player] = None) -> bool:
+        if player is None:
+            return self.overlaps(other.start, other.end)
+        else:
+            return any(self.breaks_constraint(player.activities, c) for c in player.constraints) \
+                   or self.overlaps(other.start, other.end)
+
+        # If we gave a specific player, we need to check its custom constraints.
+
+    #def find_conflicting_activities(self, activities: List[Activity], player: Optional[Player] = None) -> List[Activity]:
+    #    return [a for a in activities if self.conflicts_with(a, player=player)]
 
     def is_full(self) -> bool:
         return len(self.players) >= self.capacity
@@ -54,6 +85,17 @@ class Activity:
         return self.capacity - len(self.players)
 
 
+def window(seq: List, n: int = 2) -> Iterator:
+    return iter(seq[i: i + n] for i in range(len(seq) - n + 1))
+
+
+class Constraint:
+    TWO_SAME_DAY = 0
+    NIGHT_THEN_MORNING = 1
+    TWO_CONSECUTIVE_DAYS = 2
+    THREE_CONSECUTIVE_DAYS = 3
+    MORE_CONSECUTIVE_DAYS = 4
+
 
 class Player:
     ACTIVE_PLAYERS = 0
@@ -61,7 +103,8 @@ class Player:
     def __init__(self, name: str,
                  wishes: List[Activity],
                  max_activities: Optional[int] = None,
-                 blacklist: Optional[List[Player]] = None):
+                 blacklist: Optional[List[Player]] = None,
+                 constraints: Optional[Set[Constraint]] = None):
         # Auto number the players
         self.id = Player.ACTIVE_PLAYERS
         Player.ACTIVE_PLAYERS += 1
@@ -70,6 +113,7 @@ class Player:
         self.wishes = wishes
         self.max_activities = max_activities
         self.blacklist: List[Player] = blacklist if blacklist is not None else []
+        self.constraints: Set[Constraint] = constraints if constraints is not None else set()
 
         self.activities: List[Activity] = []
 
@@ -87,7 +131,7 @@ class Player:
         self.remove_wish(activity)
 
         # remove conflicting wishes
-        self.wishes = [a for a in self.wishes if not activity.conflicts_with(a)]
+        self.wishes = [a for a in self.wishes if not activity.conflicts_with(a, player=self)]
         # Remove activities with the same name
         self.wishes = [a for a in self.wishes if a.name != activity.name]
 
@@ -189,7 +233,6 @@ class Matching:
             if player in p.blacklist:
                 print(f"Could not give {activity.name} to {player.name} because of some blacklist conflict")
                 return
-
 
         # Add the activity to the player cast list, and the player to the activity cast list
         print(f"Giving [{activity.name}] to {player.name}")
@@ -337,7 +380,7 @@ class Matching:
     def print_players_status(self) -> None:
         print("Activities given to each player:")
         for p in self.active_players + self.done_players:
-            print(f"* {p.name} | Got {len(p.activities)} activities")
+            print(f"* {p.name} | Got {len(p.activities)} activities. Max {p.max_activities}")
             for a in p.activities:
                 print(f"  - {a.name} | Start: {a.start}")
 

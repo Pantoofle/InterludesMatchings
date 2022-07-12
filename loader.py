@@ -3,7 +3,7 @@ import pandas
 import datetime
 from typing import List, Optional, Dict
 
-from activityMatch import Activity, Player
+from activityMatch import Activity, Player, Constraint
 
 
 def load_activities(path: Path) -> List[Activity]:
@@ -90,7 +90,17 @@ def load_players(path: Path, activities: List[Activity]) -> List[Player]:
                         print(f'- {a}')
                 wishes = [w for w in wishes if not w.overlaps(start, end)]
 
-        players.append(Player(name, wishes, max_activities=max_games))
+        # Generate constraints
+        constraints_names = {
+            "Jouer deux jeux dans la même journée": Constraint.TWO_SAME_DAY,
+            "Jouer un soir et le lendemain matin": Constraint.NIGHT_THEN_MORNING,
+            "Jouer deux jours consécutifs": Constraint.TWO_CONSECUTIVE_DAYS,
+            "Jouer trois jours consécutifs": Constraint.THREE_CONSECUTIVE_DAYS,
+            "Jouer plus de trois jours consécutifs": Constraint.MORE_CONSECUTIVE_DAYS
+        }
+        constraints = set(cons for (col, cons) in constraints_names.items() if pandas.isna(p[col]))
+
+        players.append(Player(name, wishes, max_activities=max_games, constraints=constraints))
 
     # Now that the players are created, populate the blacklists
     for (name, bl_names) in blacklist.items():
