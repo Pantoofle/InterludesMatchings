@@ -5,6 +5,8 @@ from matching.games import HospitalResident
 import random
 import datetime
 
+from timeSlots import TimeSlot, generate_all_timeslots
+
 
 class Activity:
     ACTIVE_ACTIVITIES = 0
@@ -96,12 +98,21 @@ class Constraint:
     THREE_CONSECUTIVE_DAYS = 3
     MORE_CONSECUTIVE_DAYS = 4
 
+    NAMES = {
+        "Jouer deux jeux dans la même journée": TWO_SAME_DAY,
+        "Jouer un soir et le lendemain matin": NIGHT_THEN_MORNING,
+        "Jouer deux jours consécutifs": TWO_CONSECUTIVE_DAYS,
+        "Jouer trois jours consécutifs": THREE_CONSECUTIVE_DAYS,
+        "Jouer plus de trois jours consécutifs": MORE_CONSECUTIVE_DAYS
+    }
+
 
 class Player:
     ACTIVE_PLAYERS = 0
 
     def __init__(self, name: str,
                  wishes: List[Activity],
+                 non_availabilities: List[TimeSlot],
                  max_activities: Optional[int] = None,
                  blacklist: Optional[List[Player]] = None,
                  constraints: Optional[Set[Constraint]] = None):
@@ -111,14 +122,48 @@ class Player:
 
         self.name = name
         self.wishes = wishes
+        self.non_availability: List[TimeSlot] = non_availabilities
         self.max_activities = max_activities
         self.blacklist: List[Player] = blacklist if blacklist is not None else []
         self.constraints: Set[Constraint] = constraints if constraints is not None else set()
 
         self.activities: List[Activity] = []
 
+        self.filter_availability(verbose=True)
+        self.update_wishlist(verbose=True)
+
+    def filter_availability(self, verbose:bool = False) -> None:
+        conflicting = [a for a in self.wishes for slot in self.non_availability if a.overlaps(slot.start, slot.end)]
+        if verbose and conflicting:
+            print("Found wishes where not available :")
+            for a in set(conflicting):
+                print(f"- {a}")
+
+        for a in set(conflicting):
+            self.wishes.remove(a)
+
+    def update_wishlist(self, verbose:bool = False) -> None:
+        impossible_activities = []
+        for activity in self.activities:
+            impossible_activities.extend([a for a in self.wishes if a.conflicts_with(activity, self)])
+
+        if verbose and impossible_activities:
+            print("Found impossible wishes :")
+            for a in set(impossible_activities):
+                print(f"- {a}")
+
+        for a in set(impossible_activities):
+            self.wishes.remove(a)
+
     def __repr__(self):
         return f"{self.id} | {self.name}"
+
+    def could_play(self, activity: Activity) -> bool:
+        if (self.max_activities is not None) and (len(self.activities) >= self.max_activities):
+            return False
+
+        return not(any(activity.overlaps(ts.start, ts.end) for ts in self.non_availability)
+                   or any(activity.conflicts_with(a, self) for a in self.activities))
 
     def remove_wish(self, activity: Activity) -> None:
         self.wishes = [a for a in self.wishes if a != activity]
@@ -131,7 +176,7 @@ class Player:
         self.remove_wish(activity)
 
         # remove conflicting wishes
-        self.wishes = [a for a in self.wishes if not activity.conflicts_with(a, player=self)]
+        self.update_wishlist()
         # Remove activities with the same name
         self.wishes = [a for a in self.wishes if a.name != activity.name]
 
@@ -395,3 +440,11 @@ class Matching:
                 break
             self.cleanup()
         print("Done")
+
+    def print_available_players(self) -> None:
+        slots = generate_all_timeslots()
+        for s in slots:
+            dummy_activity = Activity(f"{s}", 1000, s.start, s.end)
+            potential_players = [p for p in self.active_players + self.done_players
+                                 if p.could_play(dummy_activity)]
+            print(f"{s},{','.join([p.name for p in potential_players])}")

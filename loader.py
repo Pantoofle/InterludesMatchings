@@ -1,9 +1,9 @@
 from pathlib import Path
 import pandas
-import datetime
 from typing import List, Optional, Dict
 
 from activityMatch import Activity, Player, Constraint
+from timeSlots import generate_timeslots_from_column_names, WEEK_DAYS
 
 
 def load_activities(path: Path) -> List[Activity]:
@@ -42,22 +42,10 @@ def load_players(path: Path, activities: List[Activity]) -> List[Player]:
     wishes_columns: List[str] = [c for c in players_df.columns if c.startswith("wish")]
     print(f"Detected {len(wishes_columns)} columns containing wishes")
 
-    slot_names = {
-        'matin': ('08:00', '13:00'),
-        'après-midi': ('13:00', '18:00'),
-        'soir': ('18:00', '23:59')
-    }
     day_columns: list[str] = [c for c in players_df.columns if
-                              c.split(' ')[0] in ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi',
-                                                  'Dimanche']]
-    time_slots = dict()
+                              c.split(' ')[0] in WEEK_DAYS]
 
-    for slot in day_columns:
-        day = slot.split(' ')[1]
-        start, end = slot_names[slot.split(' ')[-1]]
-        start = datetime.datetime.fromisoformat("2022-08-" + day + 'T' + start)
-        end = datetime.datetime.fromisoformat("2022-08-" + day + 'T' + end)
-        time_slots[slot] = (start, end)
+    time_slots = generate_timeslots_from_column_names(day_columns)
 
     blacklist: Dict[str, List[str]] = {}
     for (_, p) in players_df.iterrows():
@@ -79,28 +67,12 @@ def load_players(path: Path, activities: List[Activity]) -> List[Player]:
         blacklist[name] = str(p['blacklist']).strip().split(';')
 
         # Load time availability and remove wishes when the player is not available
-        for (col, (start, end)) in time_slots.items():
-            # If nothing written in the column, they are not available at this time.
-            if pandas.isna(p[col]):
-                removes = [w.name for w in wishes if w.overlaps(start, end)]
-                if removes:
-                    print(f"{name} is not available {col}. Removing impossible wishes")
-                    print(f"Removed : ")
-                    for a in removes:
-                        print(f'- {a}')
-                wishes = [w for w in wishes if not w.overlaps(start, end)]
+        non_availabilities = [slot for (col, slot) in time_slots.items() if pandas.isna(p[col])]
 
         # Generate constraints
-        constraints_names = {
-            "Jouer deux jeux dans la même journée": Constraint.TWO_SAME_DAY,
-            "Jouer un soir et le lendemain matin": Constraint.NIGHT_THEN_MORNING,
-            "Jouer deux jours consécutifs": Constraint.TWO_CONSECUTIVE_DAYS,
-            "Jouer trois jours consécutifs": Constraint.THREE_CONSECUTIVE_DAYS,
-            "Jouer plus de trois jours consécutifs": Constraint.MORE_CONSECUTIVE_DAYS
-        }
-        constraints = set(cons for (col, cons) in constraints_names.items() if pandas.isna(p[col]))
+        constraints = set(cons for (col, cons) in Constraint.NAMES.items() if pandas.isna(p[col]))
 
-        players.append(Player(name, wishes, max_activities=max_games, constraints=constraints))
+        players.append(Player(name, wishes, non_availabilities, max_activities=max_games, constraints=constraints))
 
     # Now that the players are created, populate the blacklists
     for (name, bl_names) in blacklist.items():
