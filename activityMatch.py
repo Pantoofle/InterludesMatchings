@@ -5,7 +5,7 @@ from matching.games import HospitalResident
 import random
 import datetime
 
-from timeSlots import TimeSlot, generate_all_timeslots
+from timeSlots import TimeSlot, generate_all_timeslots, SLOT_TIMES
 
 
 class Activity:
@@ -38,11 +38,17 @@ class Activity:
         if constraint == Constraint.TWO_SAME_DAY:
             return self.start.date() in [a.start.date() for a in cast]
         elif constraint == Constraint.NIGHT_THEN_MORNING:
-            # Check if there is only a few hours between the murders but on different days
-            pairs = [(self.end, a.start) for a in cast] + \
-                    [(a.end, self.start) for a in cast]
-            return any([(a - b <= datetime.timedelta(hours=17))
-                        and (a.date() != b.date()) for (a, b) in pairs])
+            for act in cast:
+                # For each activity, check if the first one starts after the beginning of "soir"
+                # the second one starts before the end of "matin"
+                # and they are on two consecutive days
+                first = min(self.start, act.start)
+                last = max(self.start, act.start)
+                if (first.time() >= datetime.time.fromisoformat(SLOT_TIMES['soir'][0])) and \
+                    (last.time() <= datetime.time.fromisoformat(SLOT_TIMES['matin'][1])) and \
+                        (first.date() + datetime.timedelta(days=1) == last.date()):
+                    return True
+            return False
         elif constraint == Constraint.TWO_CONSECUTIVE_DAYS:
             return any([abs((a.start.date() - self.start.date()).days) == 1 for a in cast])
         elif constraint == Constraint.THREE_CONSECUTIVE_DAYS:
@@ -159,6 +165,8 @@ class Player:
         return f"{self.id} | {self.name}"
 
     def could_play(self, activity: Activity) -> bool:
+        if self.name == "Arnaud Oliveau":
+            print("Arnaud")
         if (self.max_activities is not None) and (len(self.activities) >= self.max_activities):
             return False
 

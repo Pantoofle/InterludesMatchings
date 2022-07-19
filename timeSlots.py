@@ -6,7 +6,7 @@ from typing import List, Dict
 SLOT_TIMES = {
     'matin': ('08:00', '13:00'),
     'après-midi': ('13:00', '18:00'),
-    'soir': ('18:00', '23:59')
+    'soir': ('19:00', '23:59')
 }
 
 WEEK_DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']
