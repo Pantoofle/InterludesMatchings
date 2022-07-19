@@ -42,11 +42,19 @@ class Activity:
                 # For each activity, check if the first one starts after the beginning of "soir"
                 # the second one starts before the end of "matin"
                 # and they are on two consecutive days
-                first = min(self.start, act.start)
-                last = max(self.start, act.start)
-                if (first.time() >= datetime.time.fromisoformat(SLOT_TIMES['soir'][0])) and \
-                    (last.time() <= datetime.time.fromisoformat(SLOT_TIMES['matin'][1])) and \
-                        (first.date() + datetime.timedelta(days=1) == last.date()):
+                first = min(self, act, key=lambda a: a.start)
+                soir = (
+                    datetime.datetime.combine(first.start.date(), datetime.time.fromisoformat(SLOT_TIMES['soir'][0])),
+                    datetime.datetime.combine(first.start.date(), datetime.time.fromisoformat(SLOT_TIMES['soir'][1])))
+
+                last = max(self, act, key=lambda a: a.start)
+                matin = (
+                    datetime.datetime.combine(last.start.date(), datetime.time.fromisoformat(SLOT_TIMES['matin'][0])),
+                    datetime.datetime.combine(last.start.date(), datetime.time.fromisoformat(SLOT_TIMES['matin'][1])))
+
+                if (first.overlaps(soir[0], soir[1])) and \
+                        (last.overlaps(matin[0], matin[1])) and \
+                        (first.start.date() + datetime.timedelta(days=1) == last.start.date()):
                     return True
             return False
         elif constraint == Constraint.TWO_CONSECUTIVE_DAYS:
@@ -55,7 +63,7 @@ class Activity:
             days_played = set([a.start.date() for a in cast] + [self.start.date()])
             days_played = sorted(list(days_played))
             return any(((b - a).days == 1) and
-                       ((c-b).days == 1) for (a, b, c) in window(days_played, 3))
+                       ((c - b).days == 1) for (a, b, c) in window(days_played, 3))
         elif constraint == Constraint.MORE_CONSECUTIVE_DAYS:
             days_played = set([a.start.date() for a in cast] + [self.start.date()])
             days_played = sorted(list(days_played))
@@ -74,7 +82,7 @@ class Activity:
 
         # If we gave a specific player, we need to check its custom constraints.
 
-    #def find_conflicting_activities(self, activities: List[Activity], player: Optional[Player] = None) -> List[Activity]:
+    # def find_conflicting_activities(self, activities: List[Activity], player: Optional[Player] = None) -> List[Activity]:
     #    return [a for a in activities if self.conflicts_with(a, player=player)]
 
     def is_full(self) -> bool:
@@ -138,7 +146,7 @@ class Player:
         self.filter_availability(verbose=True)
         self.update_wishlist(verbose=True)
 
-    def filter_availability(self, verbose:bool = False) -> None:
+    def filter_availability(self, verbose: bool = False) -> None:
         conflicting = [a for a in self.wishes for slot in self.non_availability if a.overlaps(slot.start, slot.end)]
         if verbose and conflicting:
             print("Found wishes where not available :")
@@ -148,7 +156,7 @@ class Player:
         for a in set(conflicting):
             self.wishes.remove(a)
 
-    def update_wishlist(self, verbose:bool = False) -> None:
+    def update_wishlist(self, verbose: bool = False) -> None:
         impossible_activities = []
         for activity in self.activities:
             impossible_activities.extend([a for a in self.wishes if a.conflicts_with(activity, self)])
@@ -170,8 +178,8 @@ class Player:
         if (self.max_activities is not None) and (len(self.activities) >= self.max_activities):
             return False
 
-        return not(any(activity.overlaps(ts.start, ts.end) for ts in self.non_availability)
-                   or any(activity.conflicts_with(a, self) for a in self.activities))
+        return not (any(activity.overlaps(ts.start, ts.end) for ts in self.non_availability)
+                    or any(activity.conflicts_with(a, self) for a in self.activities))
 
     def remove_wish(self, activity: Activity) -> None:
         self.wishes = [a for a in self.wishes if a != activity]
